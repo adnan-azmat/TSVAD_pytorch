@@ -54,9 +54,9 @@ def remove_overlap(aa, bb):
 
 
 def init_speaker_encoder(source):
-	speaker_encoder = ECAPA_TDNN(C=1024)
+	speaker_encoder = ECAPA_TDNN(C=1024).cuda()
 	speaker_encoder.eval()
-	loadedState = torch.load(source, map_location="cpu")
+	loadedState = torch.load(source, map_location="cuda")
 	selfState = speaker_encoder.state_dict()
 	for name, param in loadedState.items():
 		if name in selfState:
@@ -68,7 +68,7 @@ def init_speaker_encoder(source):
 def extract_embeddings(batch, model):	
 	batch = torch.stack(batch)    
 	with torch.no_grad():
-		embeddings = model.forward(batch)
+		embeddings = model.forward(batch.cuda())
 	return embeddings
 
 def get_args():
@@ -175,28 +175,28 @@ def main():
 			json.dump(res, outs)
 			outs.write('\n')
 
-	# # Extract embeddings
-	# files = sorted(glob.glob(args.target_wav + "/*/*.wav"))
-	# model = init_speaker_encoder(args.source)
-	# for file in tqdm.tqdm(files):
-	# 	if 'all' not in file:
-	# 		batch = []
-	# 		embeddings = []
-	# 		wav_length = wave.open(file, 'rb').getnframes() # entire length for target speech
-	# 		for start in range(0, wav_length - int(args.length_embedding * 16000), int(args.step_embedding * 16000)):
-	# 			stop = start + int(args.length_embedding * 16000)
-	# 			target_speech, _ = soundfile.read(file, start = start, stop = stop)
-	# 			target_speech = torch.FloatTensor(numpy.array(target_speech))
-	# 			batch.append(target_speech)
-	# 			if len(batch) == args.batch_size:                
-	# 				embeddings.extend(extract_embeddings(batch, model))
-	# 				batch = []
-	# 		if len(batch) != 0:
-	# 			embeddings.extend(extract_embeddings(batch, model))             
-	# 		embeddings = torch.stack(embeddings)
-	# 		output_file = args.target_embedding + '/' + file.split('/')[-2] + '/' + file.split('/')[-1].replace('.wav', '.pt')
-	# 		os.makedirs(os.path.dirname(output_file), exist_ok = True)
-	# 		torch.save(embeddings, output_file)
+	# Extract embeddings
+	files = sorted(glob.glob(args.target_wav + "/*/*.wav"))
+	model = init_speaker_encoder(args.source)
+	for file in tqdm.tqdm(files):
+		if 'all' not in file:
+			batch = []
+			embeddings = []
+			wav_length = wave.open(file, 'rb').getnframes() # entire length for target speech
+			for start in range(0, wav_length - int(args.length_embedding * 16000), int(args.step_embedding * 16000)):
+				stop = start + int(args.length_embedding * 16000)
+				target_speech, _ = soundfile.read(file, start = start, stop = stop)
+				target_speech = torch.FloatTensor(numpy.array(target_speech))
+				batch.append(target_speech)
+				if len(batch) == args.batch_size:                
+					embeddings.extend(extract_embeddings(batch, model))
+					batch = []
+			if len(batch) != 0:
+				embeddings.extend(extract_embeddings(batch, model))             
+			embeddings = torch.stack(embeddings)
+			output_file = args.target_embedding + '/' + file.split('/')[-2] + '/' + file.split('/')[-1].replace('.wav', '.pt')
+			os.makedirs(os.path.dirname(output_file), exist_ok = True)
+			torch.save(embeddings, output_file)
 
 if __name__ == '__main__':
 	main()

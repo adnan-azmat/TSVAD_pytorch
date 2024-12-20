@@ -3,22 +3,22 @@
 # =======================
 # Parameters (Change these if needed)
 # =======================
-DATA_PATH="/2023_ntu-recordings_16k"  # Path to the wav directory
-MAX_SPEAKER=8  # Maximum number of speakers
-SOURCE_MODEL="../pretrained_models/ecapa-tdnn.model"  # Path to the source model
-MODEL_PATH="pretrained_models/model_0015_newlongsimdata_pretrain.model"  # Path to the model for TS-VAD
-OUTPUT_PATH="exps/infer"  # Output path
+DATA_PATH="/home/users/ntu/adnan002/scratch/data/DIHARD3_vbx_vad_osd/third_dihard_challenge_eval/data"  # Path to the wav directory
+MAX_SPEAKER=8 # Maximum number of speakers
+SOURCE_MODEL="../pretrained_models/ecapa-tdnn.model" # Path to the source model
+MODEL_PATH="pretrained_models/model_0015_newlongsimdata_pretrain.model" # Path to the model for TS-VAD
+OUTPUT_PATH="exps/infer_vad_osd_d8"  # Output path
 TEST_SHIFT=4  # Test shift value (Use: 0.5 for slightly lower DER; slower)
 N_CPU=12  # Number of CPU cores
 HF_TOKEN="your_hugging_face_token" # (Request access for https://huggingface.co/pyannote/segmentation-3.0)
 # Optional: Ground truth RTTM file (leave empty if not available)
-GROUNDTRUTH_RTTM="/2023_ntu-recordings_16k/all.rttm"
+GROUNDTRUTH_RTTM="/home/users/ntu/adnan002/scratch/data/DIHARD3_vbx_vad_osd/third_dihard_challenge_eval/data/all.rttm"
 
 # =======================
 # Stages (Change these if needed)
 # =======================
-START_STAGE=1  # Set start stage (1, 2, 3, 4)
-END_STAGE=4    # Set end stage (1, 2, 3, 4)
+START_STAGE=2  # Set start stage (1, 2, 3, 4)
+END_STAGE=3    # Set end stage (1, 2, 3, 4)
 
 # Set up the output path with a timestamp
 TIME=$(date +"%Y%m%d_%H%M%S")

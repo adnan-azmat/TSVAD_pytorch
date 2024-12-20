@@ -1,0 +1,12 @@
+#!/bin/bash
+#PBS -N d8_vad_osd
+#PBS -l select=1:ncpus=12:ngpus=1:mem=24gb
+#PBS -l walltime=00:59:50
+#PBS -q normal
+#PBS -P 12001458
+#PBS -j oe
+
+cd $PBS_O_WORKDIR
+source /home/users/ntu/adnan002/scratch/miniconda3/etc/profile.d/conda.sh
+conda activate tsvad
+./script.sh

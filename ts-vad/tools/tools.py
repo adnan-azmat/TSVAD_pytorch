@@ -36,6 +36,11 @@ def change_zeros_to_ones(inputs, min_silence, threshold):
 		res.extend([1] * num_0)
 	return res
 
+def get_device():
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    return torch.device('cpu')
+
 # Combine the short speech segments
 def change_ones_to_zeros(inputs, min_speech, threshold):
 	res = []

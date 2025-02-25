@@ -1,14 +1,13 @@
-DATA_PATH="/home/users/ntu/adnan002/scratch/data/klass_v2/recorded_corpusV2/single"
-OUTPUT_PATH="exps/eval_klass_v2_4spk_amitrain"
-# MODEL_PATH="/home/users/ntu/adnan002/scratch/repos/Adnan/2/TSVAD_pytorch/ts-vad/pretrained_models/model_0019_finetuned.model"
+DATA_PATH="/home/users/ntu/adnan002/scratch/data/DIHARD3"
+OUTPUT_PATH="exps/d8_mse_eval_model"
 
-MODEL_PATH="/home/users/ntu/adnan002/scratch/repos/Adnan/2/TSVAD_pytorch/ts-vad/exps/p418_voxconversedev17_voxconversetest8_msd5_amitrain/model/model_0012.model"
+# MODEL_PATH="{Paste the path of the model you want to evaluate}"
 
 python main.py \
-    --train_list ${DATA_PATH}/ts_infer.json \
-    --train_path ${DATA_PATH} \
-    --eval_list ${DATA_PATH}/ts_infer.json \
-    --eval_path ${DATA_PATH} \
+    --train_list ${DATA_PATH}/third_dihard_challenge_dev/data/ts_infer.json \
+    --eval_list ${DATA_PATH}/third_dihard_challenge_eval/data/ts_infer.json \
+    --train_path ${DATA_PATH}/third_dihard_challenge_dev/data \
+    --eval_path ${DATA_PATH}/third_dihard_challenge_eval/data \
     --musan_path /home/users/ntu/adnan002/scratch/data/augment/musan \
     --rir_path /home/users/ntu/adnan002/scratch/data/augment/RIRS_NOISES/simulated_rirs \
     --save_path ${OUTPUT_PATH} \
@@ -20,4 +19,4 @@ python main.py \
     --n_cpu 14 \
     --eval \
     --init_model ${MODEL_PATH} \
-    --max_speaker 4
+    --max_speaker 8

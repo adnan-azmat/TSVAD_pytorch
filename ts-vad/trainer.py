@@ -3,7 +3,6 @@ import torch.nn as nn
 from tools.tools import *
 from loss import *
 from model.ts_vad import TS_VAD
-# from model.ts_vad_light import TS_VAD
 from collections import defaultdict, OrderedDict
 from torch.cuda.amp import autocast,GradScaler
 from scipy import signal
@@ -23,8 +22,9 @@ def init_trainer(args):
 class trainer(nn.Module):
 	def __init__(self, args):
 		super(trainer, self).__init__()
-		self.ts_vad          = TS_VAD(args).cuda()
-		self.ts_loss         = Loss(args.max_speaker).cuda()
+		self.device = get_device()
+		self.ts_vad          = TS_VAD(args).to(self.device)
+		self.ts_loss         = Loss(args.max_speaker).to(self.device)
 		self.optim           = torch.optim.AdamW(self.parameters(), lr = args.lr)
 		self.scheduler       = torch.optim.lr_scheduler.StepLR(self.optim, step_size = args.test_step, gamma = args.lr_decay)
 		# print("Model para number = %.2f"%(sum(param.numel() for param in self.ts_vad.parameters()) / 1e6))
@@ -39,12 +39,12 @@ class trainer(nn.Module):
 
 		for num, (rs, ts, labels) in enumerate(args.trainLoader, start = 1):
 			self.zero_grad()
-			labels  = torch.tensor(labels, dtype=torch.float32).cuda()	
+			labels  = torch.tensor(labels, dtype=torch.float32).to(self.device)
 			with autocast():
-				rs_embeds  = self.ts_vad.rs_forward(rs.cuda())
-				ts_embeds  = self.ts_vad.ts_forward(ts.cuda())
-				outs       = self.ts_vad.cat_forward(rs_embeds, ts_embeds)
-				loss, _    = self.ts_loss.forward(outs, labels)	
+				rs_embeds  = self.ts_vad.rs_forward(rs.to(self.device))
+				ts_embeds  = self.ts_vad.ts_forward(ts.to(self.device))
+				outs = self.ts_vad.cat_forward(rs_embeds, ts_embeds, labels)
+				loss, _ = self.ts_loss.forward(outs, labels)
 			scaler.scale(loss).backward()
 			scaler.step(self.optim)
 			scaler.update()
@@ -54,7 +54,6 @@ class trainer(nn.Module):
 			sys.stderr.write("Train: [%2d] %.2f%% (est %.1f mins) Lr: %6f, Loss: %.5f\r"%\
 			(args.epoch, 100 * (num / args.trainLoader.__len__()), time_used * args.trainLoader.__len__() / num / 60, \
 			lr, nloss/(num)))
-
 			with open('prog.txt', 'w') as f:
 				f.write("Train: [%2d] %.2f%% (est %.1f mins) Lr: %6f, Loss: %.5f\r"% (args.epoch, 100 * (num / args.trainLoader.__len__()), time_used * args.trainLoader.__len__() / num / 60, lr, nloss/(num)))
 			sys.stderr.flush()			
@@ -73,11 +72,11 @@ class trainer(nn.Module):
 		res_dict = defaultdict(lambda: defaultdict(list))
 		rttm = open(args.rttm_save_path, "w")		
 		for num, (rs, ts, labels, filename, speaker_id, start) in enumerate(args.evalLoader, start = 1):
-			labels  = torch.tensor(labels, dtype=torch.float32).cuda()	
+			labels  = torch.tensor(labels, dtype=torch.float32).to(self.device)	
 			with torch.inference_mode():
-				rs_embeds  = self.ts_vad.rs_forward(rs.cuda())
-				ts_embeds  = self.ts_vad.ts_forward(ts.cuda())
-				outs       = self.ts_vad.cat_forward(rs_embeds, ts_embeds)
+				rs_embeds  = self.ts_vad.rs_forward(rs.to(self.device))
+				ts_embeds  = self.ts_vad.ts_forward(ts.to(self.device))
+				outs       = self.ts_vad.cat_forward(rs_embeds, ts_embeds, labels)
 				loss, outs   = self.ts_loss.forward(outs, labels)
 				B, _, T = outs.shape
 				labels = labels.cpu().numpy()

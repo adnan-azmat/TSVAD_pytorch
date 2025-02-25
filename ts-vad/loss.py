@@ -2,13 +2,14 @@ import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
 from tools import *
+from tools.tools import *
 
 class Loss(nn.Module):
     def __init__(self, max_speaker):   
         super(Loss, self).__init__()
+        self.device = get_device()
         self.max_speaker = max_speaker
-        # calculate dimension using (4 / max_speaker) * 96
-        self.fc = nn.Linear(int(4 / max_speaker * 96), 1)
+        self.fc = nn.Linear(int(4 / max_speaker * 96), 1).to(self.device)
         self.loss = nn.BCEWithLogitsLoss(reduction = 'mean')
         self.m = nn.Sigmoid()
 

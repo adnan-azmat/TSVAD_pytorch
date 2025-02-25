@@ -1,28 +1,36 @@
 import torch
-from torch import nn, Tensor
-import torch.nn.functional as F
+import copy
+from torch import nn
+#import torch.nn.functional as F
 from model.modules import *
 from model.WavLM import WavLM, WavLMConfig
+from model.mem_emb_xv import MULTI_SE_MA_MSE_NSD
+from tools.tools import *
 
 class TS_VAD(nn.Module):
     def __init__(self, args):
         super(TS_VAD, self).__init__()
+        self.device = get_device()
         # Speech Encoder
         max_speaker = args.max_speaker
+        from tools.configs import configs_4Speakers_wavlm
+        config_train = copy.deepcopy(configs_4Speakers_wavlm)
+        config_train["output_speaker"] = args.max_speaker
         self.max_speaker = args.max_speaker
-        checkpoint = torch.load(args.speech_encoder_pretrain, map_location="cuda")
+        checkpoint = torch.load(args.speech_encoder_pretrain, map_location="cuda" if torch.cuda.is_available() else "cpu")
         cfg  = WavLMConfig(checkpoint['cfg'])
         cfg.encoder_layers = 6
-        self.speech_encoder = WavLM(cfg)
+        self.speech_encoder = WavLM(cfg).to(self.device)
         self.speech_encoder.train()
         self.speech_encoder.load_state_dict(checkpoint['model'], strict = False)
-        self.speech_down = nn.Sequential(
-            nn.Conv1d(768, 192, 5, stride=2, padding=2),
-            nn.BatchNorm1d(192),
-            nn.ReLU(),
-            )
-        
+        # self.speech_down = nn.Sequential(
+        #     nn.Conv1d(768, 192, 5, stride=2, padding=2),
+        #     nn.BatchNorm1d(192),
+        #     nn.ReLU(),
+        #     )
+
         # TS-VAD Backend
+        self.nsd_tsvad = MULTI_SE_MA_MSE_NSD(config_train).to(self.device)
         self.backend_down = nn.Sequential(
             nn.Conv1d(384 * max_speaker, 384, 5, stride=1, padding=2),
             nn.BatchNorm1d(384),
@@ -36,12 +44,8 @@ class TS_VAD(nn.Module):
     # B: batchsize, T: number of frames (1 frame = 0.04s)
     # Obtain the reference speech representation
     def rs_forward(self, x): # B, 25 * T
-        B, _ = x.shape 
         x = self.speech_encoder.extract_features(x)[0]
-        x = x.view(B, -1, 768)  # B, 50 * T, 768
         x = x.transpose(1,2)
-        x = self.speech_down(x)
-        x = x.transpose(1,2) # B, 25 * T, 192
         return x
 
     # Obtain the target speaker representation
@@ -49,19 +53,19 @@ class TS_VAD(nn.Module):
         return x
 
     # Combine for ts-vad results
-    def cat_forward(self, rs_embeds, ts_embeds):
+    def cat_forward(self, rs_embeds, x, labels):
         # Extend ts_embeds for time alignemnt
-        ts_embeds = ts_embeds.unsqueeze(2) # B, max_speaker, 1, 192
-        ts_embeds = ts_embeds.repeat(1, 1, rs_embeds.shape[1], 1) # B, max_speaker, T, 192
-        B, _, T, _ = ts_embeds.shape
+        x = self.nsd_tsvad(rs_embeds,x,labels)
+        x = x.reshape(-1,self.max_speaker,x.shape[1],x.shape[2])
+        B, _, T, _ = x.shape
         # Transformer for single speaker
         cat_embeds = []
         for i in range(self.max_speaker):
-            ts_embed = ts_embeds[:, i, :, :] # B, T, 192
-            cat_embed = torch.cat((ts_embed,rs_embeds), 2) # B, T, 192 + B, T, 192 -> B, T, 384
-            cat_embed = cat_embed.transpose(0,1) # B, 384, T
+            # dimensions in comments not verified
+            cat_embed = x[:, i, :, :] # B, T, 384
+            cat_embed = cat_embed.transpose(0,1) # T, B, 384
             cat_embed = self.pos_encoder(cat_embed)
-            cat_embed = self.single_backend(cat_embed) # B, 384, T
+            cat_embed = self.single_backend(cat_embed) # T, B, 384
             cat_embed = cat_embed.transpose(0,1) # B, T, 384
             cat_embeds.append(cat_embed)
         cat_embeds = torch.stack(cat_embeds) # max_speaker, B, T, 384

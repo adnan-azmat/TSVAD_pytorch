@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N eval_klass_v2_4spk_amitrain
+#PBS -N d8_mse
 #PBS -l select=1:ngpus=1
 #PBS -l walltime=00:59:59
 #PBS -q normal
@@ -9,4 +9,4 @@
 cd $PBS_O_WORKDIR
 source /home/users/ntu/adnan002/miniconda3/bin/activate tsvad
 
-./run_eval.sh
+./run_train.sh

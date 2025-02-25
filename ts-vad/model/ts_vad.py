@@ -34,7 +34,7 @@ class TS_VAD(nn.Module):
         self.multi_backend = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=384, dim_feedforward = 384 * 4, nhead=8), num_layers=3)
 
     # B: batchsize, T: number of frames (1 frame = 0.04s)
-    # Obtain the reference speech represnetation
+    # Obtain the reference speech representation
     def rs_forward(self, x): # B, 25 * T
         B, _ = x.shape 
         x = self.speech_encoder.extract_features(x)[0]
@@ -44,7 +44,7 @@ class TS_VAD(nn.Module):
         x = x.transpose(1,2) # B, 25 * T, 192
         return x
 
-    # Obtain the target speaker represnetation
+    # Obtain the target speaker representation
     def ts_forward(self, x): # B, max_speaker, 192        
         return x
 

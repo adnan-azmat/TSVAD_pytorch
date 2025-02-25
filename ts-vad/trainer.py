@@ -24,18 +24,18 @@ class trainer(nn.Module):
 	def __init__(self, args):
 		super(trainer, self).__init__()
 		self.ts_vad          = TS_VAD(args).cuda()
-		self.ts_loss         = Loss(args.max_speaker).cuda()	
+		self.ts_loss         = Loss(args.max_speaker).cuda()
 		self.optim           = torch.optim.AdamW(self.parameters(), lr = args.lr)
 		self.scheduler       = torch.optim.lr_scheduler.StepLR(self.optim, step_size = args.test_step, gamma = args.lr_decay)
 		# print("Model para number = %.2f"%(sum(param.numel() for param in self.ts_vad.parameters()) / 1e6))
 
 	def train_network(self, args):
+		time_start = time.time()
 		self.train()
 		scaler = GradScaler()
 		self.scheduler.step(args.epoch - 1)
 		index, nloss = 0, 0
 		lr = self.optim.param_groups[0]['lr']
-		time_start = time.time()
 
 		for num, (rs, ts, labels) in enumerate(args.trainLoader, start = 1):
 			self.zero_grad()
@@ -54,22 +54,27 @@ class trainer(nn.Module):
 			sys.stderr.write("Train: [%2d] %.2f%% (est %.1f mins) Lr: %6f, Loss: %.5f\r"%\
 			(args.epoch, 100 * (num / args.trainLoader.__len__()), time_used * args.trainLoader.__len__() / num / 60, \
 			lr, nloss/(num)))
+
+			with open('prog.txt', 'w') as f:
+				f.write("Train: [%2d] %.2f%% (est %.1f mins) Lr: %6f, Loss: %.5f\r"% (args.epoch, 100 * (num / args.trainLoader.__len__()), time_used * args.trainLoader.__len__() / num / 60, lr, nloss/(num)))
 			sys.stderr.flush()			
 		sys.stdout.write("\n")
 
 		args.score_file.write("Train: %d epoch, LR %f, LOSS %f\n"%(args.epoch, lr, nloss/num))
+		# write time taken in score file
+		args.score_file.write("Time taken: %f\n"%(time.time() - time_start))
 		args.score_file.flush()
 		return
 		
 	def eval_network(self, args):
+		time_start = time.time()
 		self.eval()
 		index, nloss = 0, 0
-		time_start = time.time()
 		res_dict = defaultdict(lambda: defaultdict(list))
 		rttm = open(args.rttm_save_path, "w")		
 		for num, (rs, ts, labels, filename, speaker_id, start) in enumerate(args.evalLoader, start = 1):
 			labels  = torch.tensor(labels, dtype=torch.float32).cuda()	
-			with torch.no_grad():		
+			with torch.inference_mode():
 				rs_embeds  = self.ts_vad.rs_forward(rs.cuda())
 				ts_embeds  = self.ts_vad.ts_forward(ts.cuda())
 				outs       = self.ts_vad.cat_forward(rs_embeds, ts_embeds)
@@ -93,7 +98,8 @@ class trainer(nn.Module):
 			nloss/(num)))
 			sys.stderr.flush()
 		for filename in tqdm.tqdm(res_dict):
-			name, speaker_id =filename.split('-')
+			name = filename[:filename.rfind('-')]
+			speaker_id = filename[filename.rfind('-')+1:]
 			labels = res_dict[filename]
 			ave_labels = []
 			for key in labels:	

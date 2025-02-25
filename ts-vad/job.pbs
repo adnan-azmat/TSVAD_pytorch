@@ -1,11 +1,12 @@
 #!/bin/bash
+#PBS -N d8_denoise_ft_model_eval
+#PBS -l select=1:ngpus=1
+#PBS -l walltime=00:59:59
 #PBS -q normal
+#PBS -P 12001458
 #PBS -j oe
-#PBS -l ngpus=1
-#PBS -l mem=20gb
-#PBS -N tsvadtrain
-#PBS -l walltime=06:00:00
-#PBS -P Personal
-source /mnt/miniconda3/bin/activate wespeak2
-cd /mnt/TSVAD_pytorch/ts-vad
-./run_train.sh
+
+cd $PBS_O_WORKDIR
+source /home/users/ntu/adnan002/miniconda3/bin/activate tsvad
+
+./run_eval.sh

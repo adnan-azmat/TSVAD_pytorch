@@ -68,29 +68,33 @@ class train_loader(object):
 		# labels : max_speaker, T
 		# target_speech: max_speaker, 192
 		file, num_speaker, start, stop = self.data_list[index]
-		speaker_ids = self.get_ids(num_speaker)
+		speaker_ids = self.get_ids(file, num_speaker)
 		ref_speech, labels = self.load_rs(file, speaker_ids, start, stop)
 		target_speech = self.load_ts(file, speaker_ids)
 		return ref_speech, target_speech, labels
 	
-	def get_ids(self, num_speaker):
-		speaker_ids = []
+	def get_ids(self, file, num_speaker):
+		max_speaker = self.max_speaker
+		path = self.train_path + "/target_audio/" + file
+		# get all the wav files in the path
+		folder = path + '/*.wav'
+		audios = glob.glob(folder)
+		audios.remove(path + "/all.wav")
+		audios = [k.split('/')[-1].split('.')[0] for k in audios]
+		audios = [int(k) for k in audios]
+		speaker_ids = audios
 
-		for i in range(1, num_speaker + 1):
-			speaker_ids.append(i)
-		for i in range(num_speaker + 1, 5):
+		speaker_ids = speaker_ids[:max_speaker]
+		while len(speaker_ids) < max_speaker:
 			speaker_ids.append(0)
-		# if num_speaker == 2:
-		# 	speaker_ids = [1, 1, 2, 2]
-		# elif num_speaker == 3:
-		# 	speaker_ids = [1, 2, 3, random.choice([1,2,3])]
-		# else:
-		# 	speaker_ids = [1, 2, 3, 4]
+		
 		random.shuffle(speaker_ids)
 		return speaker_ids
 	
 	def load_rs(self, file, speaker_ids, start, stop):
 		ref_speech, _ = soundfile.read(self.train_path + '/target_audio/' + file + '/all.wav', start = start * 640, stop = stop * 640 + 240) # Since 25 * 640 = 16000
+		if len(ref_speech.shape) > 1:
+			ref_speech = ref_speech[:, 0] 
 		
 		frame_len = int(self.rs_len / 25 * 16000) + 240
 		ref_speech = numpy.expand_dims(numpy.array(ref_speech), axis = 0)
@@ -126,7 +130,9 @@ class train_loader(object):
 				candidate_speakers = [k for k in self.speaker_to_utt.keys() if k not in speakers_in_this_videos]
 				random_speaker = random.choice(candidate_speakers)
 				random_file = random.choice(self.speaker_to_utt[random_speaker])
-				path = self.train_path + '/target_embedding/' + random_file[:17] + '/' + str(random_file.split('_')[-1]) + '.pt'
+				prefix = random_file[:random_file.rfind('_')]
+				path = self.train_path + '/target_embedding/' + prefix + '/' + str(random_file.split('_')[-1]) + '.pt'
+			
 			feature = torch.load(path, map_location=torch.device('cpu'))
 			feature = feature[random.randint(0,feature.shape[0]-1),:]
 			target_speeches.append(feature)
@@ -139,7 +145,7 @@ class train_loader(object):
 	def add_rev(self, audio, length):
 		rir_file    = random.choice(self.rir_files)
 		rir, _     = soundfile.read(rir_file)
-		rir         = numpy.expand_dims(rir.astype(numpy.float),0)
+		rir         = numpy.expand_dims(rir.astype(float),0)
 		rir         = rir / numpy.sqrt(numpy.sum(rir**2))
 		return signal.convolve(audio, rir, mode='full')[:,:length]
 
@@ -201,21 +207,32 @@ class eval_loader(object):
 
 	def __getitem__(self, index):
 		file, num_speaker, start, stop = self.data_list[index]
-		speaker_ids = self.get_ids(num_speaker)
+		speaker_ids = self.get_ids(file, num_speaker)
 		ref_speech, labels = self.load_rs(file, speaker_ids, start, stop)
 		target_speech = self.load_ts(file, speaker_ids)
 		return ref_speech, target_speech, labels, file, numpy.array(speaker_ids), numpy.array(start)
 	
-	def get_ids(self, num_speaker):
-		speaker_ids = []
-		for i in range(1, num_speaker + 1):
-			speaker_ids.append(i)
-		for i in range(num_speaker + 1, 5):
+	def get_ids(self, file, num_speaker):
+		path = self.eval_path + "/target_audio/" + file
+		max_speaker = self.max_speaker
+		# get all the wav files in the path
+		folder = path + '/*.wav'
+		audios = glob.glob(folder)
+		audios.remove(path + "/all.wav")
+		audios = [k.split('/')[-1].split('.')[0] for k in audios]
+		audios = [int(k) for k in audios]
+		speaker_ids = audios
+
+		speaker_ids = speaker_ids[:max_speaker]
+		while len(speaker_ids) < max_speaker:
 			speaker_ids.append(0)
+		
 		return speaker_ids
 	
 	def load_rs(self, file, speaker_ids, start, stop):
 		ref_speech, _ = soundfile.read(self.eval_path + '/target_audio/' + file + '/all.wav', start = start * 640, stop = stop * 640 + 240)		
+		if len(ref_speech.shape) > 1:
+			ref_speech = ref_speech[:, 0]
 		ref_speech = torch.FloatTensor(numpy.array(ref_speech))
 		labels = []
 		for speaker_id in speaker_ids:
@@ -241,9 +258,19 @@ class eval_loader(object):
 			else:
 				speakers_in_this_videos = self.room_to_speaker[file]
 				candidate_speakers = [k for k in self.speaker_to_utt.keys() if k not in speakers_in_this_videos]
-				random_speaker = random.choice(candidate_speakers)
+				random_speaker = ""
+				
+				if len(candidate_speakers) == 0:
+					random_speaker = random.choice(self.room_to_speaker[file])
+				else:
+					random_speaker = random.choice(candidate_speakers)
+				
 				random_file = random.choice(self.speaker_to_utt[random_speaker])
-				path = self.eval_path + '/target_embedding/' + random_file[:17] + '/' + str(random_file.split('_')[-1]) + '.pt'
+
+				# create variable prefix, which is the substring of random_file from 0 to last occurence of _
+				prefix = random_file[:random_file.rfind('_')]
+
+				path = self.eval_path + '/target_embedding/' + prefix + '/' + str(random_file.split('_')[-1]) + '.pt'
 			feature = torch.load(path, map_location=torch.device('cpu'))
 			feature = torch.mean(feature, dim = 0)
 			target_speeches.append(feature)

@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N d8_denoise_ft_model_eval
+#PBS -N eval_klass_v2_4spk_amitrain
 #PBS -l select=1:ngpus=1
 #PBS -l walltime=00:59:59
 #PBS -q normal

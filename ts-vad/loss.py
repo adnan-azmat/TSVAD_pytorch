@@ -4,12 +4,12 @@ import torch.nn.functional as F
 from tools import *
 
 class Loss(nn.Module):
-    def __init__(self, max_speaker):   
+    def __init__(self, max_speaker):
         super(Loss, self).__init__()
         self.max_speaker = max_speaker
         # calculate dimension using (4 / max_speaker) * 96
         self.fc = nn.Linear(int(4 / max_speaker * 96), 1)
-        self.loss = nn.BCEWithLogitsLoss(reduction = 'mean')
+        self.loss = nn.BCEWithLogitsLoss(reduction='mean')
         self.m = nn.Sigmoid()
 
     def forward(self, x, labels=None): # x : B, max_speaker, T, int(4 / max_speaker * 96)   |     labels: B, max_speaker, T
@@ -17,12 +17,9 @@ class Loss(nn.Module):
         total_loss = 0
 
         for i in range(self.max_speaker):
-            output = x[:,i,:]
-            label = labels[:,i,:]
+            output = x[:, i, :]
+            label = labels[:, i, :]
             loss = self.loss(output, label)
             total_loss += loss
-            
         x = self.m(x)
-        x = x.data.cpu().numpy()
-
         return total_loss / self.max_speaker, x

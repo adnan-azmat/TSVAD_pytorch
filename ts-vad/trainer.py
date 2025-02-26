@@ -23,8 +23,15 @@ def init_trainer(args):
 class trainer(nn.Module):
 	def __init__(self, args):
 		super(trainer, self).__init__()
-		self.ts_vad          = TS_VAD(args).cuda()
-		self.ts_loss         = Loss(args.max_speaker).cuda()
+		self.ts_vad          = TS_VAD(args)
+		self.ts_loss         = Loss(args.max_speaker)
+
+		if torch.cuda.device_count() > 1:
+			self.ts_vad = torch.nn.DataParallel(self.ts_vad)
+		
+		self.ts_vad = self.ts_vad.cuda()
+		self.ts_loss = self.ts_loss.cuda()
+
 		self.optim           = torch.optim.AdamW(self.parameters(), lr = args.lr)
 		self.scheduler       = torch.optim.lr_scheduler.StepLR(self.optim, step_size = args.test_step, gamma = args.lr_decay)
 		# print("Model para number = %.2f"%(sum(param.numel() for param in self.ts_vad.parameters()) / 1e6))
@@ -41,10 +48,8 @@ class trainer(nn.Module):
 			self.zero_grad()
 			labels  = torch.tensor(labels, dtype=torch.float32).cuda()	
 			with autocast():
-				rs_embeds  = self.ts_vad.rs_forward(rs.cuda())
-				ts_embeds  = self.ts_vad.ts_forward(ts.cuda())
-				outs       = self.ts_vad.cat_forward(rs_embeds, ts_embeds)
-				loss, _    = self.ts_loss.forward(outs, labels)	
+				outs       = self.ts_vad(rs.cuda(), ts.cuda())
+				loss, _    = self.ts_loss(outs, labels)	
 			scaler.scale(loss).backward()
 			scaler.step(self.optim)
 			scaler.update()
@@ -75,10 +80,8 @@ class trainer(nn.Module):
 		for num, (rs, ts, labels, filename, speaker_id, start) in enumerate(args.evalLoader, start = 1):
 			labels  = torch.tensor(labels, dtype=torch.float32).cuda()	
 			with torch.inference_mode():
-				rs_embeds  = self.ts_vad.rs_forward(rs.cuda())
-				ts_embeds  = self.ts_vad.ts_forward(ts.cuda())
-				outs       = self.ts_vad.cat_forward(rs_embeds, ts_embeds)
-				loss, outs   = self.ts_loss.forward(outs, labels)
+				outs       = self.ts_vad(rs.cuda(), ts.cuda())
+				loss, outs   = self.ts_loss(outs, labels)
 				B, _, T = outs.shape
 				labels = labels.cpu().numpy()
 				for b in range(B):
@@ -102,8 +105,10 @@ class trainer(nn.Module):
 			speaker_id = filename[filename.rfind('-')+1:]
 			labels = res_dict[filename]
 			ave_labels = []
-			for key in labels:	
-				ave_labels.append(numpy.mean(labels[key]))
+			for key in labels:
+				stacked_tensor = torch.stack(labels[key])
+				ave = stacked_tensor.cpu().mean().item()
+				ave_labels.append(ave)
 			labels = signal.medfilt(ave_labels, 21)			
 			labels = change_zeros_to_ones(labels, args.min_silence, args.threshold)
 			labels = change_ones_to_zeros(labels, args.min_speech, args.threshold)
@@ -135,7 +140,8 @@ class trainer(nn.Module):
 		DER, MS, FA, SC = float(out.split('/')[0]), float(out.split('/')[1]), float(out.split('/')[2]), float(out.split('/')[3])
 		print("DER %2.2f%%, MS %2.2f%%, FA %2.2f%%, SC %2.2f%%\n"%(DER, MS, FA, SC))
 		args.score_file.write("Eval full 0.00: %d epoch, DER %2.2f%%, MS %2.2f%%, FA %2.2f%%, SC %2.2f%%, LOSS %f\n"%(args.epoch, DER, MS, FA, SC, nloss/num))
-
+		# write time taken in score file
+		args.score_file.write("Time taken: %f\n"%(time.time() - time_start))
 		args.score_file.flush()
 
 	def save_parameters(self, path):

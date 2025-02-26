@@ -79,3 +79,14 @@ class TS_VAD(nn.Module):
         # Results for each speaker
         cat_embeds = cat_embeds.reshape((B, self.max_speaker, T, -1))  # B, max_speaker, T, 96
         return cat_embeds
+
+    def forward(self, rs, ts):
+        """
+        rs: reference speech input (B, length)
+        ts: target speaker embeddings (B, max_speaker, 192)
+        """
+        current_device = rs.get_device() if rs.is_cuda else "cpu"
+        rs_embeds = self.rs_forward(rs)
+        ts_embeds = self.ts_forward(ts)
+        cat_embeds = self.cat_forward(rs_embeds, ts_embeds)
+        return cat_embeds

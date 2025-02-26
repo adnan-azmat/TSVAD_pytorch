@@ -1,26 +1,24 @@
 import torch
 import copy
-from torch import nn
-#import torch.nn.functional as F
+from torch import nn, Tensor
+import torch.nn.functional as F
 from model.modules import *
 from model.WavLM import WavLM, WavLMConfig
 from model.mem_emb_xv import MULTI_SE_MA_MSE_NSD
-from tools.tools import *
 
 class TS_VAD(nn.Module):
     def __init__(self, args):
         super(TS_VAD, self).__init__()
-        self.device = get_device()
         # Speech Encoder
         max_speaker = args.max_speaker
         from tools.configs import configs_4Speakers_wavlm
         config_train = copy.deepcopy(configs_4Speakers_wavlm)
         config_train["output_speaker"] = args.max_speaker
         self.max_speaker = args.max_speaker
-        checkpoint = torch.load(args.speech_encoder_pretrain, map_location="cuda" if torch.cuda.is_available() else "cpu")
+        checkpoint = torch.load(args.speech_encoder_pretrain, map_location="cuda")
         cfg  = WavLMConfig(checkpoint['cfg'])
         cfg.encoder_layers = 6
-        self.speech_encoder = WavLM(cfg).to(self.device)
+        self.speech_encoder = WavLM(cfg)
         self.speech_encoder.train()
         self.speech_encoder.load_state_dict(checkpoint['model'], strict = False)
         # self.speech_down = nn.Sequential(
@@ -30,7 +28,7 @@ class TS_VAD(nn.Module):
         #     )
 
         # TS-VAD Backend
-        self.nsd_tsvad = MULTI_SE_MA_MSE_NSD(config_train).to(self.device)
+        self.nsd_tsvad = MULTI_SE_MA_MSE_NSD(config_train)
         self.backend_down = nn.Sequential(
             nn.Conv1d(384 * max_speaker, 384, 5, stride=1, padding=2),
             nn.BatchNorm1d(384),
@@ -82,4 +80,15 @@ class TS_VAD(nn.Module):
         cat_embeds = torch.permute(cat_embeds, (1, 0, 2)) # B, T, 384
         # Results for each speaker
         cat_embeds = cat_embeds.reshape((B, self.max_speaker, T, -1))  # B, max_speaker, T, 96
+        return cat_embeds
+
+    def forward(self, rs, ts, labels):
+        """
+        rs: reference speech input (B, length)
+        ts: target speaker embeddings (B, max_speaker, 192)
+        """
+        current_device = rs.get_device() if rs.is_cuda else "cpu"
+        rs_embeds = self.rs_forward(rs)
+        ts_embeds = self.ts_forward(ts)
+        cat_embeds = self.cat_forward(rs_embeds, ts_embeds, labels)
         return cat_embeds

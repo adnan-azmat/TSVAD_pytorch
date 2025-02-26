@@ -1,6 +1,6 @@
 #!/bin/bash
-#PBS -N d8_mse
-#PBS -l select=1:ngpus=1
+#PBS -N p8_4gpus_mse
+#PBS -l select=1:ngpus=4
 #PBS -l walltime=00:59:59
 #PBS -q normal
 #PBS -P 12001458

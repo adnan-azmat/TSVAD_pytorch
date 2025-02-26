@@ -50,7 +50,7 @@ if args.eval == True:
 ## Training
 if args.train == True:
 	while args.epoch < args.max_epoch:
-		for param in s.ts_vad.speech_encoder.parameters():
+		for param in s.ts_vad.module.speech_encoder.parameters():
 			if args.epoch < args.warm_up_epoch:
 				param.requires_grad = False
 			else:

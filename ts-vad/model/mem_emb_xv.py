@@ -7,8 +7,6 @@ from tools.tools import *
 class MA_MSE(nn.Module):
     def __init__(self, fea_dim=20*128, n_heads=8, speaker_embedding_path=""):
         super(MA_MSE, self).__init__()
-
-        self.device = get_device()
         self.n_heads = n_heads
 
         #Dictionary number of cluster * speaker_embedding_dim
@@ -16,10 +14,10 @@ class MA_MSE(nn.Module):
         self.N_clusters, Emb_dim = self.m.shape
 
         # Define matrices W (from audio feature) and U (from embedding)
-        self.W = nn.Linear(fea_dim, n_heads).to(self.device)
-        self.U = nn.Linear(Emb_dim, n_heads).to(self.device)
+        self.W = nn.Linear(fea_dim, n_heads)
+        self.U = nn.Linear(Emb_dim, n_heads)
 
-        self.v = nn.Linear(n_heads, 1).to(self.device)
+        self.v = nn.Linear(n_heads, 1)
 
     def forward(self, x, mask):
         '''
@@ -38,7 +36,7 @@ class MA_MSE(nn.Module):
         w = self.W(x_2).repeat(1, self.N_clusters, 1).reshape(Batch, self.N_clusters, num_speaker, self.n_heads).transpose(1, 2)
 
         #self.U(self.m) [N_clusters, n_heads]
-        m = self.m.to(self.device)
+        m = self.m.to(x.device)
         u = self.U(m).repeat(Batch*num_speaker, 1).reshape(Batch, num_speaker, self.N_clusters, self.n_heads)
 
         #c: Attention [Batch, num_speaker, N_clusters]
@@ -58,18 +56,17 @@ class MULTI_SE_MA_MSE_NSD(nn.Module):
 
     def __init__(self, configs):
         super(MULTI_SE_MA_MSE_NSD, self).__init__()
-        self.device = get_device()
         self.input_size = configs["input_dim"]
         self.Linear_dim = configs["Linear_dim"]
         self.output_speaker = configs["output_speaker"]
         #self.batchnorm = nn.BatchNorm2d(1,device='cuda')
         self.average_pooling = nn.AvgPool1d(configs["average_pooling"], stride=2, padding=configs["average_pooling"]//2)
         # MA-MSE
-        self.mamse1 = MA_MSE(fea_dim=configs["fea_dim"], n_heads=configs["n_heads1"], speaker_embedding_path=configs["embedding_path1"]).to(self.device)
-        self.mamse2 = MA_MSE(fea_dim=configs["fea_dim"], n_heads=configs["n_heads2"], speaker_embedding_path=configs["embedding_path2"]).to(self.device)
+        self.mamse1 = MA_MSE(fea_dim=configs["fea_dim"], n_heads=configs["n_heads1"], speaker_embedding_path=configs["embedding_path1"])
+        self.mamse2 = MA_MSE(fea_dim=configs["fea_dim"], n_heads=configs["n_heads2"], speaker_embedding_path=configs["embedding_path2"])
 
         self.splice_size = configs["splice_size"]
-        self.Linear = nn.Linear(self.splice_size, self.Linear_dim).to(self.device)
+        self.Linear = nn.Linear(self.splice_size, self.Linear_dim)
         self.relu = nn.ReLU(True)
 
     def forward(self, x, overall_embedding, mask, split_seg=-1, return_embedding=False):
